@@ -1,0 +1,111 @@
+pipeline {
+    agent any
+    environment {
+        AWS_CREDENTIALS_ID = 'AWS_Role_Name'
+        SRC_BUCKET = 'source-bucket'
+        DST_BUCKET = 'destination-bucket'
+        REGION = 'us-east-1'
+    }
+    stages {
+        stage('Current Objects Sync') {
+            steps {
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: "${AWS_CREDENTIALS_ID}"]]) {
+                    script {
+                        try {
+                            echo "Starting current objects sync at ${new Date()}"
+                            sh """
+                            aws s3 sync s3://${SRC_BUCKET} s3://${DST_BUCKET} \
+                                --acl bucket-owner-full-control \
+                                --exact-timestamps \
+                                --metadata-directive COPY \
+                                --sse AES256 \
+                                --region ${REGION} \
+                                --only-show-errors
+                            """
+                            echo "Current objects sync completed successfully."
+                        } catch (err) {
+                            error("Current objects sync failed: ${err}")
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Noncurrent Objects Copy') {
+            steps {
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: "${AWS_CREDENTIALS_ID}"]]) {
+                    script {
+                        try {
+                            echo "Listing noncurrent objects..."
+                            sh """
+                            aws s3api list-object-versions --bucket ${SRC_BUCKET} --query 'Versions[?IsLatest==\`false\`]' --output json > noncurrent.json
+                            """
+                            echo "Copying noncurrent objects..."
+                            sh """
+                            cat noncurrent.json | jq -c '.[]' | while read obj; do
+                                KEY=\$(echo \$obj | jq -r '.Key')
+                                VERSION=\$(echo \$obj | jq -r '.VersionId')
+                                echo "Copying noncurrent object: \$KEY (version: \$VERSION)"
+                                aws s3api copy-object \
+                                    --bucket ${DST_BUCKET} \
+                                    --key "\$KEY" \
+                                    --copy-source ${SRC_BUCKET}/\$KEY?versionId=\$VERSION \
+                                    --acl bucket-owner-full-control \
+                                    --metadata-directive COPY \
+                                    --server-side-encryption AES256 \
+                                    --region ${REGION}
+                            done
+                            """
+                            echo "Noncurrent objects copy completed."
+                        } catch (err) {
+                            error("Noncurrent objects copy failed: ${err}")
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Delete Markers Handling') {
+            steps {
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: "${AWS_CREDENTIALS_ID}"]]) {
+                    script {
+                        try {
+                            echo "Listing delete markers..."
+                            sh """
+                            aws s3api list-object-versions --bucket ${SRC_BUCKET} --query 'DeleteMarkers' --output json > delete_markers.json
+                            """
+                            echo "Re-creating delete markers in destination..."
+                            sh """
+                            cat delete_markers.json | jq -c '.[]' | while read obj; do
+                                KEY=\$(echo \$obj | jq -r '.Key')
+                                echo "Creating delete marker for: \$KEY"
+                                aws s3api delete-object \
+                                    --bucket ${DST_BUCKET} \
+                                    --key "\$KEY" \
+                                    --region ${REGION}
+                            done
+                            """
+                            echo "Delete markers processed."
+                        } catch (err) {
+                            error("Delete markers processing failed: ${err}")
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Final Status') {
+            steps {
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: "${AWS_CREDENTIALS_ID}"]]) {
+                    script {
+                        echo "Verifying destination bucket..."
+                        sh """
+                        aws s3 ls s3://${DST_BUCKET} --summarize --human-readable --recursive
+                        """
+                        echo "Migration completed successfully at ${new Date()}"
+                    }
+                }
+            }
+        }
+    }
+}
