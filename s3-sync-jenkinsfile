@@ -1,0 +1,124 @@
+pipeline {
+    agent any
+
+    environment {
+        AWS_DEFAULT_REGION = 'us-east-1'
+
+        SOURCE_BUCKET      = 's3://source-bucket-name'
+        DEST_BUCKET        = 's3://destination-bucket-name'
+
+        // Used for permission validation
+        TEST_OBJECT_KEY    = 'jenkins-permission-check/test-file.txt'
+
+        // Timestamp for logging
+        RUN_TS             = "${new Date().format("yyyy-MM-dd HH:mm:ss", TimeZone.getTimeZone('UTC'))}"
+    }
+
+    stages {
+
+        stage('Initialize') {
+            steps {
+                script {
+                    echo "===================================================="
+                    echo "S3 SYNC JOB STARTED AT (UTC): ${env.RUN_TS}"
+                    echo "Source Bucket      : ${env.SOURCE_BUCKET}"
+                    echo "Destination Bucket : ${env.DEST_BUCKET}"
+                    echo "===================================================="
+                }
+            }
+        }
+
+        stage('Permission Check (Cross Account)') {
+            steps {
+                script {
+                    try {
+                        echo "Running cross-account permission validation..."
+
+                        sh """
+                            set -e
+
+                            echo "Creating local test file"
+                            echo "jenkins permission check - ${RUN_TS}" > test-file.txt
+
+                            echo "Uploading test object to destination bucket"
+                            aws s3 cp test-file.txt \
+                              ${DEST_BUCKET}/${TEST_OBJECT_KEY} \
+                              --acl bucket-owner-full-control \
+                              --sse AES256 \
+                              --no-progress
+
+                            echo "Validating object exists in destination"
+                            aws s3 ls ${DEST_BUCKET}/${TEST_OBJECT_KEY}
+
+                            echo "Cleaning up test object"
+                            aws s3 rm ${DEST_BUCKET}/${TEST_OBJECT_KEY}
+
+                            rm -f test-file.txt
+                        """
+
+                        echo "Permission check PASSED"
+
+                    } catch (err) {
+                        error """
+                        Permission check FAILED.
+                        Cross-account access to destination bucket is not working.
+                        Error: ${err}
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('S3 Sync') {
+            steps {
+                script {
+                    try {
+                        echo "Starting S3 sync at (UTC): ${new Date().format("yyyy-MM-dd HH:mm:ss", TimeZone.getTimeZone('UTC'))}"
+
+                        sh """
+                            set -e
+
+                            aws s3 sync \
+                              ${SOURCE_BUCKET} \
+                              ${DEST_BUCKET} \
+                              --acl bucket-owner-full-control \
+                              --sse AES256 \
+                              --exact-timestamps \
+                              --only-show-errors \
+                              --no-progress \
+                              --delete
+                        """
+
+                        echo "S3 sync completed successfully"
+
+                    } catch (err) {
+                        error """
+                        S3 sync FAILED.
+                        Error: ${err}
+                        """
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            script {
+                echo "===================================================="
+                echo "S3 SYNC STATUS : SUCCESS"
+                echo "Completed at   : ${new Date().format("yyyy-MM-dd HH:mm:ss", TimeZone.getTimeZone('UTC'))}"
+                echo "===================================================="
+            }
+        }
+
+        failure {
+            script {
+                echo "===================================================="
+                echo "S3 SYNC STATUS : FAILED"
+                echo "Completed at   : ${new Date().format("yyyy-MM-dd HH:mm:ss", TimeZone.getTimeZone('UTC'))}"
+                echo "===================================================="
+            }
+        }
+    }
+}
