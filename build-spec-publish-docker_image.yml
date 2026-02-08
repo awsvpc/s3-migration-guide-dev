@@ -1,0 +1,26 @@
+version: 0.2
+
+phases:
+  pre_build:
+    commands:
+      - COMMIT_ID=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -b -8)
+      - echo Logging in to Amazon ECR...
+      - aws ecr get-login-password --region ${AWS_DEFAULT_REGION} | docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com
+
+  build:
+    commands:
+      - echo Build started on `date`    
+      - docker-compose build
+      - docker tag ${IMAGE_REPO_NAME}:${COMMIT_ID} ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${IMAGE_REPO_NAME}:${COMMIT_ID}
+ 
+  post_build:
+    commands:
+      - echo Build completed on `date`
+      - echo Pushing the Docker image...
+      - docker push ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${IMAGE_REPO_NAME}:${COMMIT_ID}
+
+/*
+This AWS CodeBuild buildspec (v0.2) automates Dockerized application deployment. In the pre-build phase, it captures the commit ID and logs into Amazon ECR. The build phase uses Docker Compose to build and tag the image. In the post-build phase, it logs completion time and pushes the Docker image to Amazon ECR. This concise pipeline streamlines …
+*/
+
+      
