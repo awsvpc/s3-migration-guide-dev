@@ -1,0 +1,41 @@
+{
+  "Comment": "Migrate RDS snapshots for disaster recovery",
+  "StartAt": "MigrateRDSSnapshots",
+  "States": {
+    "MigrateRDSSnapshots": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:XX-XXXX-2:XXXXXX:function:migrate-rds-snapshots",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 6,
+          "BackoffRate": 2
+        }
+      ],
+      "InputPath": "$",
+      "ResultPath": "$",
+      "Comment": "It will create RDS snapshots and migrate(copy) to another region.",
+      "Next": "CheckSnapshotsMigrated"
+    },
+    "CheckSnapshotsMigrated": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.MigrationCompleted",
+          "BooleanEquals": false,
+          "Next": "MigrateRDSSnapshots"
+        }
+      ],
+      "Default": "Done"
+    },
+    "Done": {
+      "Type": "Pass",
+      "End": true
+    }
+  }
+}
