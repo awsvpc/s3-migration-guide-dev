@@ -1,0 +1,63 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "RDSSnapshotMigrationDestination",
+      "Effect": "Allow",
+      "Action": [
+        "rds:DescribeDBSnapshots",
+        "rds:CopyDBSnapshot",
+        "rds:RestoreDBInstanceFromDBSnapshot",
+        "rds:DeleteDBSnapshot",
+        "rds:ListTagsForResource",
+        "rds:AddTagsToResource",
+        "rds:DescribeDBInstances"
+      ],
+      "Resource": [
+        "arn:aws:rds:*:DESTINATION_ACCOUNT_ID:snapshot:*",
+        "arn:aws:rds:*:DESTINATION_ACCOUNT_ID:db:*",
+        "arn:aws:rds:*:SOURCE_ACCOUNT_ID:snapshot:*"
+      ]
+    },
+    {
+      "Sid": "KMSPermissionsDestination",
+      "Effect": "Allow",
+      "Action": [
+        "kms:CreateKey",
+        "kms:CreateAlias",
+        "kms:DescribeKey",
+        "kms:CreateGrant",
+        "kms:Decrypt",
+        "kms:Encrypt",
+        "kms:GenerateDataKey",
+        "kms:GenerateDataKeyWithoutPlaintext",
+        "kms:ReEncryptFrom",
+        "kms:ReEncryptTo",
+        "kms:ListKeys",
+        "kms:ListAliases",
+        "kms:GetKeyPolicy",
+        "kms:PutKeyPolicy"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "STSPermissions",
+      "Effect": "Allow",
+      "Action": [
+        "sts:GetCallerIdentity"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "EC2NetworkPermissions",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:DescribeVpcs",
+        "ec2:DescribeSubnets",
+        "ec2:DescribeSecurityGroups",
+        "ec2:DescribeAvailabilityZones"
+      ],
+      "Resource": "*"
+    }
+  ]
+}

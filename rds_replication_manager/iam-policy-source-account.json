@@ -1,0 +1,45 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "RDSSnapshotMigrationSource",
+      "Effect": "Allow",
+      "Action": [
+        "rds:DescribeDBInstances",
+        "rds:DescribeDBSnapshots",
+        "rds:StopDBInstance",
+        "rds:CreateDBSnapshot",
+        "rds:CopyDBSnapshot",
+        "rds:ModifyDBSnapshotAttribute",
+        "rds:DeleteDBSnapshot",
+        "rds:ListTagsForResource",
+        "rds:AddTagsToResource"
+      ],
+      "Resource": [
+        "arn:aws:rds:*:SOURCE_ACCOUNT_ID:db:*",
+        "arn:aws:rds:*:SOURCE_ACCOUNT_ID:snapshot:*"
+      ]
+    },
+    {
+      "Sid": "KMSPermissionsSource",
+      "Effect": "Allow",
+      "Action": [
+        "kms:DescribeKey",
+        "kms:GetKeyPolicy",
+        "kms:CreateGrant",
+        "kms:Decrypt",
+        "kms:ListKeys",
+        "kms:ListAliases"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "STSPermissions",
+      "Effect": "Allow",
+      "Action": [
+        "sts:GetCallerIdentity"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
